@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catat Pengeluaran</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f0f2f5; padding: 16px; }
+    .card { background: white; border-radius: 12px; padding: 20px; max-width: 480px; margin: 0 auto; }
+    h2 { margin-bottom: 20px; color: #333; font-size: 18px; }
+    label { display: block; margin-bottom: 4px; font-size: 13px; color: #666; font-weight: 600; }
+    select, input[type=text], input[type=number] {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd;
+      border-radius: 8px; font-size: 15px; margin-bottom: 14px; outline: none;
+    }
+    select:focus, input:focus { border-color: #4CAF50; }
+    .upload-area {
+      border: 2px dashed #ddd; border-radius: 8px; padding: 16px;
+      text-align: center; cursor: pointer; margin-bottom: 14px; color: #999;
+    }
+    .upload-area.has-file { border-color: #4CAF50; color: #4CAF50; }
+    #preview { max-width: 100%; max-height: 180px; margin-top: 8px; border-radius: 8px; display: none; }
+    button {
+      width: 100%; padding: 14px; background: #4CAF50; color: white;
+      border: none; border-radius: 8px; font-size: 16px; cursor: pointer;
+    }
+    button:disabled { background: #aaa; }
+    .success { text-align: center; padding: 40px 20px; }
+    .success h2 { color: #4CAF50; font-size: 24px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="formCard">
+    <h2>📝 Catat Pengeluaran</h2>
+
+    <label>Kategori</label>
+    <select id="category"></select>
+
+    <label>Keterangan</label>
+    <input type="text" id="desc" placeholder="contoh: Nasi Padang, Token Listrik...">
+
+    <label>Nominal (Rp)</label>
+    <input type="number" id="amount" placeholder="25000">
+
+    <label>Metode Pembayaran</label>
+    <select id="payment"></select>
+
+    <label>Foto Struk (opsional)</label>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+      📷 Tap untuk ambil / pilih foto
+      <br><small>Bisa skip kalau ga ada struk</small>
+      <img id="preview">
+    </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="previewFile(this)">
+
+    <button id="submitBtn" onclick="submitForm()">💾 Simpan</button>
+  </div>
+
+  <div class="success" id="successCard" style="display:none">
+    <h2>✅ Tersimpan!</h2>
+    <p style="color:#666">Pengeluaran berhasil dicatat.<br>Cek notifikasi di Telegram kamu.</p>
+  </div>
+
+  <script>
+    // Ambil chatId dari URL
+    var chatId = new URLSearchParams(window.location.search).get('chatId') || '';
+    var fileBase64 = null;
+    var fileMime = null;
+
+    // Default categories & payments (bisa dikustomisasi)
+    var categories = ['Makan', 'Transport', 'Tagihan', 'Belanja', 'Hiburan', 'Kesehatan', 'Lainnya'];
+    var payments = ['Cash', 'BCA', 'QRIS', 'GoPay', 'OVO', 'Dana', 'Lainnya'];
+
+    // Populate dropdowns
+    categories.forEach(function(c) {
+      document.getElementById('category').innerHTML += '<option>' + c + '</option>';
+    });
+    payments.forEach(function(p) {
+      document.getElementById('payment').innerHTML += '<option>' + p + '</option>';
+    });
+
+    function previewFile(input) {
+      var file = input.files[0];
+      if (!file) return;
+      fileMime = file.type;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        fileBase64 = e.target.result.split(',')[1];
+        var preview = document.getElementById('preview');
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+        document.getElementById('uploadArea').classList.add('has-file');
+        document.getElementById('uploadArea').querySelector('small').textContent = 'Foto terpilih ✓';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function submitForm() {
+      var desc = document.getElementById('desc').value.trim();
+      var amount = document.getElementById('amount').value.trim();
+
+      if (!desc) { alert('Isi Keterangan dulu!'); return; }
+      if (!amount || isNaN(amount)) { alert('Nominal harus berupa angka!'); return; }
+
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Menyimpan...';
+
+      var payload = {
+        category: document.getElementById('category').value,
+        desc: desc,
+        amount: amount,
+        payment: document.getElementById('payment').value,
+        chatId: chatId,
+        receiptBase64: fileBase64 || null,
+        receiptMime: fileMime || null
+      };
+
+      fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          document.getElementById('formCard').style.display = 'none';
+          document.getElementById('successCard').style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Gagal simpan');
+        }
+      })
+      .catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = '💾 Simpan';
+        alert('Gagal: ' + err.message);
+      });
+    }
+  </script>
+</body>
+</html>
